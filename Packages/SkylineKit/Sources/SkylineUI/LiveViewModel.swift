@@ -16,6 +16,22 @@ public final class LiveViewModel {
     public var showHUD = true
     public var showLandmarks = true
 
+    /// Synthetic pose for the simulator (no camera or motion sensors): pans slowly across
+    /// Midtown from the Roosevelt Island reference viewpoint so the overlay can be seen.
+    public var demoMode = LiveViewModel.isSimulator {
+        didSet { if demoMode { startDemo() } else { stopDemo() } }
+    }
+    public private(set) var demoHeading = 250.0
+    @ObservationIgnored private var demoTask: Task<Void, Never>?
+
+    public static var isSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
     /// Floor the iPad is on; drives height above ground until the resection solve exists.
     public var floor: Int {
         didSet { UserDefaults.standard.set(floor, forKey: Keys.floor) }
@@ -49,12 +65,14 @@ public final class LiveViewModel {
     }
 
     public func start() {
-        camera.start()
+        if demoMode { startDemo() }
+        if !Self.isSimulator { camera.start() }
         motion.start()
         location.start()
     }
 
     public func stop() {
+        stopDemo()
         camera.stop()
         motion.stop()
         location.stop()
@@ -62,9 +80,9 @@ public final class LiveViewModel {
 
     public var heightAboveGround: Double { Viewpoint.heightAboveGround(floor: floor) }
 
-    /// GPS viewpoint, or the reference viewpoint when there is no fix yet.
+    /// GPS viewpoint, or the reference viewpoint when there is no fix yet (or in demo mode).
     public var viewpoint: Viewpoint {
-        location.viewpoint(heightAboveGround: heightAboveGround)
+        (demoMode ? nil : location.viewpoint(heightAboveGround: heightAboveGround))
             ?? Viewpoint(
                 latitude: Viewpoint.rooseveltIslandReference.latitude,
                 longitude: Viewpoint.rooseveltIslandReference.longitude,
@@ -78,6 +96,15 @@ public final class LiveViewModel {
     public var correction: PoseCorrection { PoseCorrection(yaw: debugYawBias) }
 
     public func projector(viewSize: Size2) -> Projector? {
+        if demoMode {
+            guard viewSize.width > 0 else { return nil }
+            let k = CameraIntrinsics.aspectFill(
+                horizontalFOV: 64, sensorSize: Size2(width: 1920, height: 1080),
+                viewSize: viewSize, orientation: orientation
+            )
+            let attitude = Attitude.looking(heading: demoHeading, elevation: 3, orientation: orientation)
+            return Projector(attitude: attitude, intrinsics: k, orientation: orientation, correction: correction)
+        }
         guard let sample = motion.latest, camera.fieldOfView > 0, viewSize.width > 0 else { return nil }
         let k = CameraIntrinsics.aspectFill(
             horizontalFOV: camera.fieldOfView,
@@ -106,6 +133,24 @@ public final class LiveViewModel {
             else { return nil }
             return LandmarkMarker(landmark: lm, look: look, point: p)
         }
+    }
+
+    private func startDemo() {
+        guard demoTask == nil else { return }
+        demoTask = Task { @MainActor [weak self] in
+            let start = Date()
+            while !Task.isCancelled {
+                let t = Date().timeIntervalSince(start)
+                // Sweep 225°–275°, which covers One WTC through Central Park Tower.
+                self?.demoHeading = 250 + 25 * sin(t * 2 * .pi / 40)
+                try? await Task.sleep(nanoseconds: 33_000_000)
+            }
+        }
+    }
+
+    private func stopDemo() {
+        demoTask?.cancel()
+        demoTask = nil
     }
 
     // MARK: Milestone 0 field capture

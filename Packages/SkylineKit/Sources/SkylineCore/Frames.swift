@@ -46,6 +46,25 @@ public struct Attitude: Equatable, Sendable {
         deviceFromReference = Mat3(rows: deviceX.normalized, deviceY.normalized, deviceZ.normalized)
     }
 
+    /// The attitude of a device held upright with its rear camera pointing at `heading`,
+    /// tilted up by `elevation`, in the given UI orientation. Used by tests and by the
+    /// simulator demo mode, which has no motion sensors.
+    public static func looking(heading: Double, elevation: Double = 0, orientation: ScreenOrientation) -> Attitude {
+        let forward = ReferenceFrame.direction(bearing: heading, elevation: elevation)
+        let right = ReferenceFrame.direction(bearing: heading + 90, elevation: 0)
+        let up = right.cross(forward)
+        // Rows of deviceFromReference are the device axes in the reference frame. Screen
+        // right/up are known in device coords, so each device axis is the matching mix of
+        // the world-frame right/up vectors; device z points back out of the screen.
+        let axes = orientation.screenAxes
+        func deviceAxis(_ r: Double, _ u: Double) -> Vec3 { right * r + up * u }
+        return Attitude(
+            deviceX: deviceAxis(axes.right.x, axes.up.x),
+            deviceY: deviceAxis(axes.right.y, axes.up.y),
+            deviceZ: -forward
+        )
+    }
+
     /// Gravity as the accelerometer would see it in the device frame (units of g).
     public var expectedGravity: Vec3 { deviceFromReference * Vec3(0, 0, -1) }
 

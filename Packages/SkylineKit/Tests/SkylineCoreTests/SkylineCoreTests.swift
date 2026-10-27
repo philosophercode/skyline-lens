@@ -1,23 +1,8 @@
 import XCTest
 @testable import SkylineCore
 
-/// An attitude with the rear camera level, pointing at `heading`, in the given UI orientation.
 func levelAttitude(heading: Double, orientation: ScreenOrientation) -> Attitude {
-    let forward = ReferenceFrame.direction(bearing: heading, elevation: 0)
-    let right = ReferenceFrame.direction(bearing: heading + 90, elevation: 0)
-    let up = Vec3(0, 0, 1)
-    // Device axes in the reference frame: z is opposite the camera; x and y follow
-    // from the screen axes for this orientation.
-    let z = -forward
-    let axes = orientation.screenAxes
-    // Screen right/up are given in device coords; invert that mapping.
-    // device axis i in reference = sum over screen axes of component * world axis.
-    func deviceAxis(_ i: Int) -> Vec3 {
-        let r = [axes.right.x, axes.right.y, axes.right.z][i]
-        let u = [axes.up.x, axes.up.y, axes.up.z][i]
-        return right * r + up * u
-    }
-    return Attitude(deviceX: deviceAxis(0), deviceY: deviceAxis(1), deviceZ: z)
+    Attitude.looking(heading: heading, orientation: orientation)
 }
 
 let viewSize = Size2(width: 1180, height: 820)
@@ -127,6 +112,16 @@ final class FrameTests: XCTestCase {
 }
 
 final class ProjectorTests: XCTestCase {
+    func testLookingWithElevation() throws {
+        for o in ScreenOrientation.allCases {
+            let k = intrinsics(o)
+            let p = Projector(attitude: Attitude.looking(heading: 240, elevation: 4, orientation: o), intrinsics: k, orientation: o)
+            XCTAssertEqual(p.centerAngles.bearing, 240, accuracy: 1e-9, "\(o)")
+            XCTAssertEqual(p.centerAngles.elevation, 4, accuracy: 1e-9, "\(o)")
+            XCTAssertEqual(p.horizonRoll, 0, accuracy: 1e-9, "\(o)")
+        }
+    }
+
     func testCenterAndOffsetsInEveryOrientation() throws {
         for o in ScreenOrientation.allCases {
             let k = intrinsics(o)

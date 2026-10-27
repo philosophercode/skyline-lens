@@ -15,8 +15,12 @@ public struct LiveView: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                CameraPreview(session: model.camera.session, device: model.camera.captureDevice)
-                    .ignoresSafeArea()
+                if model.demoMode {
+                    DemoBackdrop().ignoresSafeArea()
+                } else {
+                    CameraPreview(session: model.camera.session, device: model.camera.captureDevice)
+                        .ignoresSafeArea()
+                }
                 CompassOverlay(model: model)
                     .ignoresSafeArea()
                 if model.showHUD {
@@ -59,6 +63,14 @@ public struct LiveView: View {
     }
 
     @ViewBuilder private var statusBanner: some View {
+        if model.demoMode {
+            banner("Demo pose: synthetic view from Roosevelt Island, no camera", color: .blue)
+        } else {
+            cameraBanner
+        }
+    }
+
+    @ViewBuilder private var cameraBanner: some View {
         switch model.camera.state {
         case .denied:
             banner("Camera access is off. Enable it in Settings › Skyline Lens.")
@@ -77,12 +89,12 @@ public struct LiveView: View {
             .foregroundStyle(.white)
     }
 
-    private func banner(_ text: String) -> some View {
+    private func banner(_ text: String, color: Color = .red) -> some View {
         Text(text)
             .font(.callout.weight(.semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(.red.opacity(0.75), in: Capsule())
+            .background(color.opacity(0.75), in: Capsule())
     }
 }
 
@@ -107,6 +119,7 @@ struct SettingsSheet: View {
                 Section {
                     Toggle("Debug HUD", isOn: $model.showHUD)
                     Toggle("Landmark sanity markers", isOn: $model.showLandmarks)
+                    Toggle("Demo pose (no camera)", isOn: $model.demoMode)
                     VStack(alignment: .leading) {
                         Text("Manual yaw bias: \(model.debugYawBias, specifier: "%.1f")°")
                         Slider(value: $model.debugYawBias, in: -30...30, step: 0.5)
@@ -121,6 +134,17 @@ struct SettingsSheet: View {
             .navigationTitle("Skyline Lens")
             .toolbar { Button("Done") { dismiss() } }
         }
+    }
+}
+
+/// Stand-in for the camera feed in demo mode: dusk sky over dark water.
+struct DemoBackdrop: View {
+    var body: some View {
+        LinearGradient(
+            colors: [Color(red: 0.10, green: 0.16, blue: 0.32), Color(red: 0.55, green: 0.45, blue: 0.55),
+                     Color(red: 0.08, green: 0.10, blue: 0.16)],
+            startPoint: .top, endPoint: .bottom
+        )
     }
 }
 
