@@ -1,0 +1,10 @@
+.DS_Store
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+*.xcuserstate
+Packages/SkylineKit/Package.resolved
+__pycache__/
+prototype/data/
+Secrets.xcconfig
