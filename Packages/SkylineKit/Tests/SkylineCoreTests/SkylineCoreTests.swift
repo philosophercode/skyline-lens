@@ -252,5 +252,9 @@ final class CaptureMetadataTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(CaptureMetadata.self, from: data), meta)
         XCTAssertTrue(meta.fileStem.hasSuffix("_roosevelt-island-26f"), meta.fileStem)
         XCTAssertFalse(meta.fileStem.contains(":"))
+        XCTAssertFalse(meta.fileStem.contains("."))
+        var later = meta
+        later.capturedAt = meta.capturedAt.addingTimeInterval(0.25)
+        XCTAssertNotEqual(later.fileStem, meta.fileStem)
     }
 }

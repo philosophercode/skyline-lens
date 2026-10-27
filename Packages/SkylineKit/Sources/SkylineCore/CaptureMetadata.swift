@@ -33,13 +33,15 @@ public struct CaptureMetadata: Codable, Equatable, Sendable {
         public var magneticAccuracy: String
         public var reportedHeading: Double?
         public var convention: String
+        /// Core Motion timestamp of this sample (seconds of system uptime).
+        public var sampleTimestamp: Double?
         /// Camera centre bearing / elevation / roll as the app computed them.
         public var cameraBearing: Double?
         public var cameraElevation: Double?
         public var horizonRoll: Double?
 
         public init(deviceFromReference: [[Double]], gravity: [Double], referenceFrame: String,
-                    magneticAccuracy: String, reportedHeading: Double?, convention: String,
+                    magneticAccuracy: String, reportedHeading: Double?, convention: String, sampleTimestamp: Double? = nil,
                     cameraBearing: Double?, cameraElevation: Double?, horizonRoll: Double?) {
             self.deviceFromReference = deviceFromReference
             self.gravity = gravity
@@ -47,6 +49,7 @@ public struct CaptureMetadata: Codable, Equatable, Sendable {
             self.magneticAccuracy = magneticAccuracy
             self.reportedHeading = reportedHeading
             self.convention = convention
+            self.sampleTimestamp = sampleTimestamp
             self.cameraBearing = cameraBearing
             self.cameraElevation = cameraElevation
             self.horizonRoll = horizonRoll
@@ -78,6 +81,9 @@ public struct CaptureMetadata: Codable, Equatable, Sendable {
 
     public var schemaVersion = 1
     public var capturedAt: Date
+    /// Exposure time on the same clock as `Motion.sampleTimestamp`; their difference is
+    /// how stale the recorded pose is.
+    public var exposureTimestamp: Double?
     public var interfaceOrientation: String
     public var siteLabel: String
     public var lens: Lens
@@ -106,8 +112,9 @@ public struct CaptureMetadata: Codable, Equatable, Sendable {
     /// File stem like `2026-10-27T05-49-01Z_roosevelt-island` (safe on every filesystem).
     public var fileStem: String {
         let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        let stamp = f.string(from: capturedAt).replacingOccurrences(of: ":", with: "-")
+        // Millisecond precision so rapid captures never share a filename.
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let stamp = f.string(from: capturedAt).replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: ".", with: "-")
         let slug = siteLabel.lowercased()
             .map { $0.isLetter || $0.isNumber ? $0 : "-" }
             .reduce(into: "") { s, c in if !(c == "-" && s.last == "-") { s.append(c) } }

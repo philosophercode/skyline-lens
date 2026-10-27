@@ -104,11 +104,18 @@ public final class CameraController {
     }
 
     /// Captures a still (JPEG) for Milestone 0 field data. `rotationAngle` should match the
-    /// preview so the saved image is upright. Calls back on the main queue.
-    public func capturePhoto(rotationAngle: CGFloat?, completion: @escaping (Data?, Size2?) -> Void) {
+    /// preview so the saved image is upright. `onExposure` fires as the exposure starts, so
+    /// callers can snapshot the pose then rather than at tap time. `completion` gets the JPEG,
+    /// its pixel size and the exposure's host-clock time in seconds (the clock Core Motion
+    /// timestamps use). Both call back on the main queue.
+    public func capturePhoto(
+        rotationAngle: CGFloat?,
+        onExposure: @escaping () -> Void,
+        completion: @escaping (Data?, Size2?, Double?) -> Void
+    ) {
         sessionQueue.async {
             guard self.session.isRunning else {
-                DispatchQueue.main.async { completion(nil, nil) }
+                DispatchQueue.main.async { completion(nil, nil, nil) }
                 return
             }
             if let angle = rotationAngle, let connection = self.photoOutput.connection(with: .video),
@@ -117,10 +124,13 @@ public final class CameraController {
             }
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             let id = settings.uniqueID
-            let delegate = PhotoDelegate { [weak self] data, size in
-                self?.sessionQueue.async { self?.photoDelegates[id] = nil }
-                DispatchQueue.main.async { completion(data, size) }
-            }
+            let delegate = PhotoDelegate(
+                exposing: { DispatchQueue.main.async(execute: onExposure) },
+                done: { [weak self] data, size, time in
+                    self?.sessionQueue.async { self?.photoDelegates[id] = nil }
+                    DispatchQueue.main.async { completion(data, size, time) }
+                }
+            )
             self.photoDelegates[id] = delegate
             self.photoOutput.capturePhoto(with: settings, delegate: delegate)
         }
@@ -131,13 +141,22 @@ public final class CameraController {
 }
 
 private final class PhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
-    let done: (Data?, Size2?) -> Void
+    let exposing: () -> Void
+    let done: (Data?, Size2?, Double?) -> Void
 
-    init(done: @escaping (Data?, Size2?) -> Void) { self.done = done }
+    init(exposing: @escaping () -> Void, done: @escaping (Data?, Size2?, Double?) -> Void) {
+        self.exposing = exposing
+        self.done = done
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        exposing()
+    }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         let dims = photo.resolvedSettings.photoDimensions
-        done(photo.fileDataRepresentation(), Size2(width: Double(dims.width), height: Double(dims.height)))
+        let time = photo.timestamp.isValid ? photo.timestamp.seconds : nil
+        done(photo.fileDataRepresentation(), Size2(width: Double(dims.width), height: Double(dims.height)), time)
     }
 }
 #endif

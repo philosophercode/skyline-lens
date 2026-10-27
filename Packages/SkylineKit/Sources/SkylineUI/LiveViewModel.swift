@@ -116,11 +116,27 @@ public final class LiveViewModel {
             .appendingPathComponent("captures", isDirectory: true)
     }
 
+    /// Pose state frozen for one capture.
+    private struct PoseSnapshot {
+        var sample: MotionSample?
+        var convention: AttitudeConvention
+        var projector: Projector?
+        var capturedAt: Date
+    }
+
+    private final class SnapshotBox { var value: PoseSnapshot? }
+
+    private func poseSnapshot(viewSize: Size2) -> PoseSnapshot {
+        PoseSnapshot(sample: motion.latest, convention: motion.convention,
+                     projector: projector(viewSize: viewSize), capturedAt: Date())
+    }
+
     /// Saves a JPEG plus a JSON sidecar with everything the app knows about pose and lens.
+    /// The pose is snapshotted when the exposure starts, not at tap time, and both clocks
+    /// are recorded so the offline solver can measure any remaining lag.
     public func capture(viewSize: Size2) {
-        let projector = self.projector(viewSize: viewSize)
-        let sample = motion.latest
-        let convention = motion.convention
+        let tapSnapshot = poseSnapshot(viewSize: viewSize)
+        let exposureSnapshot = SnapshotBox()
         let loc = location.location
         let rotation: CGFloat = switch self.orientation {
         case .landscapeRight: 0
@@ -136,50 +152,57 @@ public final class LiveViewModel {
         let relAlt = location.relativeAltitude
         let lensName = camera.deviceName, fov = camera.fieldOfView, format = camera.formatSize, zoom = camera.zoomFactor
 
-        camera.capturePhoto(rotationAngle: rotation) { [weak self] data, size in
-            guard let self else { return }
-            guard let data else {
-                self.lastCaptureMessage = "Capture failed"
-                return
-            }
-            let motionMeta = sample.map { s in
-                CaptureMetadata.Motion(
-                    deviceFromReference: s.attitude.deviceFromReference.rowArrays,
-                    gravity: [s.gravity.x, s.gravity.y, s.gravity.z],
-                    referenceFrame: s.referenceFrame,
-                    magneticAccuracy: s.magneticAccuracy,
-                    reportedHeading: s.reportedHeading,
-                    convention: convention.rawValue,
-                    cameraBearing: projector?.centerAngles.bearing,
-                    cameraElevation: projector?.centerAngles.elevation,
-                    horizonRoll: projector?.horizonRoll
+        camera.capturePhoto(
+            rotationAngle: rotation,
+            onExposure: { [weak self] in exposureSnapshot.value = self?.poseSnapshot(viewSize: viewSize) },
+            completion: { [weak self] data, size, exposureTime in
+                guard let self else { return }
+                guard let data else {
+                    self.lastCaptureMessage = "Capture failed"
+                    return
+                }
+                let snap = exposureSnapshot.value ?? tapSnapshot
+                let motionMeta = snap.sample.map { s in
+                    CaptureMetadata.Motion(
+                        deviceFromReference: s.attitude.deviceFromReference.rowArrays,
+                        gravity: [s.gravity.x, s.gravity.y, s.gravity.z],
+                        referenceFrame: s.referenceFrame,
+                        magneticAccuracy: s.magneticAccuracy,
+                        reportedHeading: s.reportedHeading,
+                        convention: snap.convention.rawValue,
+                        sampleTimestamp: s.timestamp,
+                        cameraBearing: snap.projector?.centerAngles.bearing,
+                        cameraElevation: snap.projector?.centerAngles.elevation,
+                        horizonRoll: snap.projector?.horizonRoll
+                    )
+                }
+                var meta = CaptureMetadata(
+                    capturedAt: snap.capturedAt,
+                    interfaceOrientation: orientation.rawValue,
+                    siteLabel: site,
+                    lens: .init(deviceName: lensName, horizontalFOV: fov,
+                                formatWidth: Int(format.width), formatHeight: Int(format.height), zoomFactor: zoom,
+                                photoWidth: Int(size?.width ?? 0), photoHeight: Int(size?.height ?? 0)),
+                    motion: motionMeta,
+                    location: .init(latitude: loc?.coordinate.latitude, longitude: loc?.coordinate.longitude,
+                                    horizontalAccuracy: loc?.horizontalAccuracy, altitude: loc?.altitude,
+                                    verticalAccuracy: loc?.verticalAccuracy, relativeBarometricAltitude: relAlt,
+                                    floor: floor, heightAboveGround: height),
+                    correction: correction
                 )
+                meta.exposureTimestamp = exposureTime
+                do {
+                    let dir = Self.capturesDirectory
+                    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    try data.write(to: dir.appendingPathComponent(meta.fileStem + ".jpg"))
+                    try meta.jsonData().write(to: dir.appendingPathComponent(meta.fileStem + ".json"))
+                    self.captureCount += 1
+                    self.lastCaptureMessage = "Saved \(meta.fileStem)"
+                } catch {
+                    self.lastCaptureMessage = "Save failed: \(error.localizedDescription)"
+                }
             }
-            let meta = CaptureMetadata(
-                capturedAt: Date(),
-                interfaceOrientation: orientation.rawValue,
-                siteLabel: site,
-                lens: .init(deviceName: lensName, horizontalFOV: fov,
-                            formatWidth: Int(format.width), formatHeight: Int(format.height), zoomFactor: zoom,
-                            photoWidth: Int(size?.width ?? 0), photoHeight: Int(size?.height ?? 0)),
-                motion: motionMeta,
-                location: .init(latitude: loc?.coordinate.latitude, longitude: loc?.coordinate.longitude,
-                                horizontalAccuracy: loc?.horizontalAccuracy, altitude: loc?.altitude,
-                                verticalAccuracy: loc?.verticalAccuracy, relativeBarometricAltitude: relAlt,
-                                floor: floor, heightAboveGround: height),
-                correction: correction
-            )
-            do {
-                let dir = Self.capturesDirectory
-                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                try data.write(to: dir.appendingPathComponent(meta.fileStem + ".jpg"))
-                try meta.jsonData().write(to: dir.appendingPathComponent(meta.fileStem + ".json"))
-                self.captureCount += 1
-                self.lastCaptureMessage = "Saved \(meta.fileStem)"
-            } catch {
-                self.lastCaptureMessage = "Save failed: \(error.localizedDescription)"
-            }
-        }
+        )
     }
 }
 #endif
