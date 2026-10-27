@@ -50,7 +50,7 @@ final class GeodesyTests: XCTestCase {
     func testDueNorthAndEast() {
         let o = GeodeticCoordinate(latitude: 40.75, longitude: -73.98)
         let north = Geodesy.lookAngle(from: o, to: GeodeticCoordinate(latitude: 40.76, longitude: -73.98), refraction: 0)
-        XCTAssertEqual(north.bearing, 0, accuracy: 1e-6)
+        XCTAssertEqual(wrap180(north.bearing), 0, accuracy: 1e-6) // may come back as 359.999…
         XCTAssertEqual(north.distance, 1111, accuracy: 3) // ~111.0 km per degree of latitude
         let east = Geodesy.lookAngle(from: o, to: GeodeticCoordinate(latitude: 40.75, longitude: -73.97), refraction: 0)
         XCTAssertEqual(east.bearing, 90, accuracy: 0.01)
