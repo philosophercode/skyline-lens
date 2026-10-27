@@ -81,7 +81,7 @@ public enum AttitudeConvention: String, Sendable {
 }
 
 /// UI orientation of the interface, mirroring `UIInterfaceOrientation` without UIKit.
-public enum InterfaceOrientation: String, CaseIterable, Sendable {
+public enum ScreenOrientation: String, CaseIterable, Sendable {
     case portrait
     case portraitUpsideDown
     /// `UIInterfaceOrientation.landscapeLeft`: the device's top edge points right.

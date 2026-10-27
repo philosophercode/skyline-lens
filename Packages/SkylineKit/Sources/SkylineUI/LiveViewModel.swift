@@ -12,7 +12,7 @@ public final class LiveViewModel {
     public let motion = MotionTracker()
     public let location = LocationProvider()
 
-    public var orientation: InterfaceOrientation = .landscapeRight
+    public var orientation: ScreenOrientation = .landscapeRight
     public var showHUD = true
     public var showLandmarks = true
 

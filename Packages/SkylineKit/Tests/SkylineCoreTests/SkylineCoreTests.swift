@@ -2,7 +2,7 @@ import XCTest
 @testable import SkylineCore
 
 /// An attitude with the rear camera level, pointing at `heading`, in the given UI orientation.
-func levelAttitude(heading: Double, orientation: InterfaceOrientation) -> Attitude {
+func levelAttitude(heading: Double, orientation: ScreenOrientation) -> Attitude {
     let forward = ReferenceFrame.direction(bearing: heading, elevation: 0)
     let right = ReferenceFrame.direction(bearing: heading + 90, elevation: 0)
     let up = Vec3(0, 0, 1)
@@ -22,7 +22,7 @@ func levelAttitude(heading: Double, orientation: InterfaceOrientation) -> Attitu
 
 let viewSize = Size2(width: 1180, height: 820)
 
-func intrinsics(_ orientation: InterfaceOrientation) -> CameraIntrinsics {
+func intrinsics(_ orientation: ScreenOrientation) -> CameraIntrinsics {
     CameraIntrinsics.aspectFill(
         horizontalFOV: 64,
         sensorSize: Size2(width: 1920, height: 1080),
@@ -99,14 +99,14 @@ final class FrameTests: XCTestCase {
     }
 
     func testScreenAxesAreRightHanded() {
-        for o in InterfaceOrientation.allCases {
+        for o in ScreenOrientation.allCases {
             let (r, u) = o.screenAxes
             XCTAssertEqual((r.cross(u) - Vec3(0, 0, 1)).length, 0, accuracy: 1e-12, "\(o)")
         }
     }
 
     func testLevelAttitudeIsRotation() {
-        for o in InterfaceOrientation.allCases {
+        for o in ScreenOrientation.allCases {
             let m = levelAttitude(heading: 37, orientation: o).deviceFromReference
             XCTAssertLessThan((m * m.transposed).maxAbsDifference(.identity), 1e-12, "\(o)")
             let r = m.rows
@@ -128,7 +128,7 @@ final class FrameTests: XCTestCase {
 
 final class ProjectorTests: XCTestCase {
     func testCenterAndOffsetsInEveryOrientation() throws {
-        for o in InterfaceOrientation.allCases {
+        for o in ScreenOrientation.allCases {
             let k = intrinsics(o)
             let p = Projector(attitude: levelAttitude(heading: 225, orientation: o), intrinsics: k, orientation: o)
             let c = try XCTUnwrap(p.project(bearing: 225, elevation: 0))
@@ -148,7 +148,7 @@ final class ProjectorTests: XCTestCase {
     }
 
     func testUnprojectInvertsProject() throws {
-        let o = InterfaceOrientation.landscapeLeft
+        let o = ScreenOrientation.landscapeLeft
         let p = Projector(
             attitude: levelAttitude(heading: 200, orientation: o),
             intrinsics: intrinsics(o),
@@ -165,7 +165,7 @@ final class ProjectorTests: XCTestCase {
 
     func testYawCorrection() throws {
         // Sensor says the camera faces 200°, but it really faces 210° (yaw +10).
-        let o = InterfaceOrientation.landscapeRight
+        let o = ScreenOrientation.landscapeRight
         let k = intrinsics(o)
         let p = Projector(attitude: levelAttitude(heading: 200, orientation: o), intrinsics: k, orientation: o,
                           correction: PoseCorrection(yaw: 10))
@@ -175,7 +175,7 @@ final class ProjectorTests: XCTestCase {
     }
 
     func testPitchAndRollCorrectionSigns() throws {
-        let o = InterfaceOrientation.landscapeRight
+        let o = ScreenOrientation.landscapeRight
         let k = intrinsics(o)
         let att = levelAttitude(heading: 0, orientation: o)
 
@@ -202,7 +202,7 @@ final class ProjectorTests: XCTestCase {
 
 final class CompassTickTests: XCTestCase {
     func testTicksCoverVisibleBearings() {
-        let o = InterfaceOrientation.landscapeRight
+        let o = ScreenOrientation.landscapeRight
         let k = intrinsics(o)
         let p = Projector(attitude: levelAttitude(heading: 225, orientation: o), intrinsics: k, orientation: o)
         let ticks = CompassTicks.ticks(for: p, margin: 0)
@@ -214,7 +214,7 @@ final class CompassTickTests: XCTestCase {
     }
 
     func testTicksWrapThroughNorth() {
-        let o = InterfaceOrientation.landscapeLeft
+        let o = ScreenOrientation.landscapeLeft
         let p = Projector(attitude: levelAttitude(heading: 2, orientation: o), intrinsics: intrinsics(o), orientation: o)
         let bearings = Set(CompassTicks.ticks(for: p).map(\.bearing))
         XCTAssert(bearings.contains(0) && bearings.contains(350) && bearings.contains(10))

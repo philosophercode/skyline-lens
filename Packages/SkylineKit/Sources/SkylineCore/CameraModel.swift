@@ -27,7 +27,7 @@ public struct CameraIntrinsics: Equatable, Sendable {
         horizontalFOV: Double,
         sensorSize: Size2,
         viewSize: Size2,
-        orientation: InterfaceOrientation,
+        orientation: ScreenOrientation,
         zoomFactor: Double = 1
     ) -> CameraIntrinsics {
         let long = max(sensorSize.width, sensorSize.height)
@@ -78,7 +78,7 @@ public struct PoseCorrection: Equatable, Codable, Sendable {
 public struct Projector: Sendable {
     public let attitude: Attitude
     public let intrinsics: CameraIntrinsics
-    public let orientation: InterfaceOrientation
+    public let orientation: ScreenOrientation
     public let correction: PoseCorrection
 
     /// Rows are camera right, camera up, camera forward, in the reference frame
@@ -88,7 +88,7 @@ public struct Projector: Sendable {
     public init(
         attitude: Attitude,
         intrinsics: CameraIntrinsics,
-        orientation: InterfaceOrientation,
+        orientation: ScreenOrientation,
         correction: PoseCorrection = .zero
     ) {
         self.attitude = attitude

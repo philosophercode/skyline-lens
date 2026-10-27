@@ -127,16 +127,16 @@ struct SettingsSheet: View {
 /// Reports the window scene's interface orientation (landscape left vs right matters
 /// for the camera maths, and SwiftUI does not expose it directly).
 struct InterfaceOrientationReader: UIViewRepresentable {
-    let onChange: (InterfaceOrientation) -> Void
+    let onChange: (ScreenOrientation) -> Void
 
     func makeUIView(context: Context) -> ReaderView { ReaderView(onChange: onChange) }
     func updateUIView(_ view: ReaderView, context: Context) { view.onChange = onChange }
 
     final class ReaderView: UIView {
-        var onChange: (InterfaceOrientation) -> Void
-        private var last: InterfaceOrientation?
+        var onChange: (ScreenOrientation) -> Void
+        private var last: ScreenOrientation?
 
-        init(onChange: @escaping (InterfaceOrientation) -> Void) {
+        init(onChange: @escaping (ScreenOrientation) -> Void) {
             self.onChange = onChange
             super.init(frame: .zero)
             isUserInteractionEnabled = false
@@ -163,7 +163,7 @@ struct InterfaceOrientationReader: UIViewRepresentable {
 
         private func report() {
             guard let scene = window?.windowScene else { return }
-            let o: InterfaceOrientation
+            let o: ScreenOrientation
             switch scene.effectiveGeometry.interfaceOrientation {
             case .portrait: o = .portrait
             case .portraitUpsideDown: o = .portraitUpsideDown
