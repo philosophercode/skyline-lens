@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests-linux:
+    # Cheap first signal: SkylineCore is pure Swift, so its tests run on Linux.
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test SkylineCore
+        working-directory: Packages/SkylineKit
+        run: swift test
+
+  ios-build:
+    # macOS minutes cost 10x Linux minutes on private repos, so only one macOS job.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode
+        run: xcodebuild -version
+      - name: Test SkylineKit on macOS
+        working-directory: Packages/SkylineKit
+        run: swift test
+      - name: Build app for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project SkylineLens.xcodeproj \
+            -scheme SkylineLens \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
